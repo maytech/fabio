@@ -30,6 +30,7 @@ import (
 	"github.com/fabiolb/fabio/registry/file"
 	"github.com/fabiolb/fabio/registry/static"
 	"github.com/fabiolb/fabio/route"
+	"github.com/pkg/profile"
 	dmp "github.com/sergi/go-diff/diffmatchpatch"
 )
 
@@ -59,9 +60,32 @@ func main() {
 	log.Printf("[INFO] Version %s starting", version)
 	log.Printf("[INFO] Go runtime is %s", runtime.Version())
 
+	// setup profiling if enabled
+	var prof interface {
+		Stop()
+	}
+	switch cfg.ProfileMode {
+	case "cpu":
+		prof = profile.Start(profile.CPUProfile, profile.NoShutdownHook)
+	case "mem":
+		prof = profile.Start(profile.MemProfile, profile.NoShutdownHook)
+	case "mutex":
+		prof = profile.Start(profile.MutexProfile, profile.NoShutdownHook)
+	case "block":
+		prof = profile.Start(profile.BlockProfile, profile.NoShutdownHook)
+	default:
+		log.Fatalf("[FATAL] Invalid profile mode %q", cfg.ProfileMode)
+	}
+	if cfg.ProfileMode != "" {
+		log.Printf("[INFO] Profile mode %q", cfg.ProfileMode)
+	}
+
 	exit.Listen(func(s os.Signal) {
 		atomic.StoreInt32(&shuttingDown, 1)
 		proxy.Shutdown(cfg.Proxy.ShutdownWait)
+		if prof != nil {
+			prof.Stop()
+		}
 		if registry.Default == nil {
 			return
 		}
