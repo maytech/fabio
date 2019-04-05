@@ -118,6 +118,7 @@ type Registry struct {
 	Static  Static
 	File    File
 	Consul  Consul
+	Custom  Custom
 	Timeout time.Duration
 	Retry   time.Duration
 }
@@ -151,6 +152,18 @@ type Consul struct {
 	CheckDeregisterCriticalServiceAfter string
 	ChecksRequired                      string
 	ServiceMonitors                     int
+	TLS                                 ConsulTlS
+}
+
+type Custom struct {
+	Host               string
+	Path               string
+	QueryParams        string
+	Scheme             string
+	CheckTLSSkipVerify bool
+	PollingInterval    time.Duration
+	NoRouteHTML        string
+	Timeout            time.Duration
 }
 
 type Tracing struct {
@@ -170,6 +183,16 @@ type AuthScheme struct {
 }
 
 type BasicAuth struct {
-	Realm string
-	File  string
+	Realm   string
+	File    string
+	Refresh time.Duration
+	ModTime time.Time // the htpasswd file last modification time
+}
+
+type ConsulTlS struct {
+	KeyFile            string
+	CertFile           string
+	CAFile             string
+	CAPath             string
+	InsecureSkipVerify bool
 }

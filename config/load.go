@@ -172,6 +172,11 @@ func load(cmdline, environ, envprefix []string, props *properties.Properties) (c
 	f.StringVar(&cfg.Registry.Consul.KVPath, "registry.consul.kvpath", defaultConfig.Registry.Consul.KVPath, "consul KV path for manual overrides")
 	f.StringVar(&cfg.Registry.Consul.NoRouteHTMLPath, "registry.consul.noroutehtmlpath", defaultConfig.Registry.Consul.NoRouteHTMLPath, "consul KV path for HTML returned when no route is found")
 	f.StringVar(&cfg.Registry.Consul.TagPrefix, "registry.consul.tagprefix", defaultConfig.Registry.Consul.TagPrefix, "prefix for consul tags")
+	f.StringVar(&cfg.Registry.Consul.TLS.KeyFile, "registry.consul.tls.keyfile", defaultConfig.Registry.Consul.TLS.KeyFile, "path to consul key file")
+	f.StringVar(&cfg.Registry.Consul.TLS.CertFile, "registry.consul.tls.certfile", defaultConfig.Registry.Consul.TLS.CertFile, "path to consul cert file")
+	f.StringVar(&cfg.Registry.Consul.TLS.CAFile, "registry.consul.tls.cafile", defaultConfig.Registry.Consul.TLS.CAFile, "path to consul CA file")
+	f.StringVar(&cfg.Registry.Consul.TLS.CAPath, "registry.consul.tls.capath", defaultConfig.Registry.Consul.TLS.CAPath, "path to consul CA directory")
+	f.BoolVar(&cfg.Registry.Consul.TLS.InsecureSkipVerify, "registry.consul.tls.insecureskipverify", defaultConfig.Registry.Consul.TLS.InsecureSkipVerify, "is tls check enabled")
 	f.BoolVar(&cfg.Registry.Consul.Register, "registry.consul.register.enabled", defaultConfig.Registry.Consul.Register, "register fabio in consul")
 	f.StringVar(&cfg.Registry.Consul.ServiceAddr, "registry.consul.register.addr", defaultConfig.Registry.Consul.ServiceAddr, "service registration address")
 	f.StringVar(&cfg.Registry.Consul.ServiceName, "registry.consul.register.name", defaultConfig.Registry.Consul.ServiceName, "service registration name")
@@ -199,6 +204,15 @@ func load(cmdline, environ, envprefix []string, props *properties.Properties) (c
 	f.Float64Var(&cfg.Tracing.SamplerRate, "tracing.SamplerRate", defaultConfig.Tracing.SamplerRate, "OpenTrace sample rate percentage in decimal form")
 	f.StringVar(&cfg.Tracing.SpanHost, "tracing.SpanHost", defaultConfig.Tracing.SpanHost, "Host:Port info to add to spans")
 	f.BoolVar(&cfg.GlobMatchingDisabled, "glob.matching.disabled", defaultConfig.GlobMatchingDisabled, "Disable Glob Matching on routes, one of [true, false]")
+
+	f.StringVar(&cfg.Registry.Custom.Host, "registry.custom.host", defaultConfig.Registry.Custom.Host, "custom back end hostname/port")
+	f.StringVar(&cfg.Registry.Custom.Scheme, "registry.custom.scheme", defaultConfig.Registry.Custom.Scheme, "custom back end scheme - http/https")
+	f.StringVar(&cfg.Registry.Custom.NoRouteHTML, "registry.custom.noroutehtml", defaultConfig.Registry.Custom.NoRouteHTML, "path to file for HTML returned when no route is found")
+	f.BoolVar(&cfg.Registry.Custom.CheckTLSSkipVerify, "registry.custom.checkTLSSkipVerify", defaultConfig.Registry.Custom.CheckTLSSkipVerify, "custom back end check TLS verification")
+	f.DurationVar(&cfg.Registry.Custom.Timeout, "registry.custom.timeout", defaultConfig.Registry.Custom.Timeout, "timeout for API request to custom back end")
+	f.DurationVar(&cfg.Registry.Custom.PollingInterval, "registry.custom.pollinginterval", defaultConfig.Registry.Custom.PollingInterval, "polling interval for API request to custom back end")
+	f.StringVar(&cfg.Registry.Custom.Path, "registry.custom.path", defaultConfig.Registry.Custom.Path, "custom back end path in the URL")
+	f.StringVar(&cfg.Registry.Custom.QueryParams, "registry.custom.queryparams", defaultConfig.Registry.Custom.QueryParams, "custom back end query parameters in the URL")
 
 	// deprecated flags
 	var proxyLogRoutes string
@@ -613,8 +627,9 @@ func parseAuthScheme(cfg map[string]string) (a AuthScheme, err error) {
 		return AuthScheme{}, fmt.Errorf("missing 'type' in auth '%s'", a.Name)
 	case "basic":
 		a.Basic = BasicAuth{
-			File:  cfg["file"],
-			Realm: cfg["realm"],
+			File:    cfg["file"],
+			Realm:   cfg["realm"],
+			Refresh: 0, // the htpasswd file refresh is disabled by default
 		}
 
 		if a.Basic.File == "" {
@@ -623,6 +638,18 @@ func parseAuthScheme(cfg map[string]string) (a AuthScheme, err error) {
 		if a.Basic.Realm == "" {
 			a.Basic.Realm = a.Name
 		}
+
+		if cfg["refresh"] != "" {
+			d, err := time.ParseDuration(cfg["refresh"])
+			if err != nil {
+				return AuthScheme{}, err
+			}
+			if d < time.Second {
+				d = time.Second
+			}
+			a.Basic.Refresh = d
+		}
+
 	default:
 		return AuthScheme{}, fmt.Errorf("unknown auth type '%s'", a.Type)
 	}
